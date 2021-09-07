@@ -60,6 +60,7 @@ void BluetoothService::fillFeatures(aasdk::proto::messages::ServiceDiscoveryResp
         channelDescriptor->set_channel_id(static_cast<uint32_t>(channel_->getId()));
         auto bluetoothChannel = channelDescriptor->mutable_bluetooth_channel();
         bluetoothChannel->set_adapter_address(bluetoothDevice_->getLocalAddress());
+        bluetoothChannel->add_supported_pairing_methods(aasdk::proto::enums::BluetoothPairingMethod_Enum_HFP);
     }
 }
 

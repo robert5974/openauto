@@ -1,26 +1,16 @@
-/*
-*  This file is part of openauto project.
-*  Copyright (C) 2018 f1x.studio (Michal Szwaj)
-*
-*  openauto is free software: you can redistribute it and/or modify
-*  it under the terms of the GNU General Public License as published by
-*  the Free Software Foundation; either version 3 of the License, or
-*  (at your option) any later version.
-
-*  openauto is distributed in the hope that it will be useful,
-*  but WITHOUT ANY WARRANTY; without even the implied warranty of
-*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-*  GNU General Public License for more details.
-*
-*  You should have received a copy of the GNU General Public License
-*  along with openauto. If not, see <http://www.gnu.org/licenses/>.
-*/
-
 #pragma once
 
 #include <stdint.h>
+#include <atomic>
 #include <memory>
+#include <sstream>
 #include <QBluetoothServer>
+#include <QBluetoothLocalDevice>
+#include <QDataStream>
+#include <btservice_proto/NetworkInfo.pb.h>
+#include <btservice_proto/SocketInfoRequest.pb.h>
+#include <btservice_proto/SocketInfoResponse.pb.h>
+#include "openauto/Configuration/Configuration.hpp"
 #include "IAndroidBluetoothServer.hpp"
 
 namespace openauto
@@ -33,15 +23,26 @@ class AndroidBluetoothServer: public QObject, public IAndroidBluetoothServer
     Q_OBJECT
 
 public:
-    AndroidBluetoothServer();
-
+    AndroidBluetoothServer(openauto::configuration::IConfiguration::Pointer config);
     bool start(const QBluetoothAddress& address, uint16_t portNumber) override;
 
 private slots:
     void onClientConnected();
+    void readSocket();
 
 private:
     std::unique_ptr<QBluetoothServer> rfcommServer_;
+    QBluetoothSocket* socket_;
+    openauto::configuration::IConfiguration::Pointer config_;
+
+    void handleUnknownMessage(int messageType, QByteArray data);
+    void handleSocketInfoRequest(QByteArray data);
+    void handleSocketInfoRequestResponse(QByteArray data);
+    void writeSocketInfoRequest();
+    void writeSocketInfoResponse();
+    void writeNetworkInfoMessage();
+    bool writeProtoMessage(uint16_t messageType, google::protobuf::Message& message);
+
 };
 
 }

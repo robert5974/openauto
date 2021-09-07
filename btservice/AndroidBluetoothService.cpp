@@ -36,7 +36,7 @@ AndroidBluetoothService::AndroidBluetoothService(uint16_t portNumber)
     serviceInfo_.setAttribute(QBluetoothServiceInfo::ServiceClassIds, classId);
     serviceInfo_.setAttribute(QBluetoothServiceInfo::ServiceName, "OpenAuto Bluetooth Service");
     serviceInfo_.setAttribute(QBluetoothServiceInfo::ServiceDescription, "AndroidAuto WiFi projection automatic setup");
-    serviceInfo_.setAttribute(QBluetoothServiceInfo::ServiceProvider, "f1xstudio.com");
+    serviceInfo_.setAttribute(QBluetoothServiceInfo::ServiceProvider, "openDsh");
     serviceInfo_.setServiceUuid(serviceUuid);
 
     QBluetoothServiceInfo::Sequence publicBrowse;
@@ -49,7 +49,7 @@ AndroidBluetoothService::AndroidBluetoothService(uint16_t portNumber)
     protocolDescriptorList.append(QVariant::fromValue(protocol));
     protocol.clear();
     protocol << QVariant::fromValue(QBluetoothUuid(QBluetoothUuid::Rfcomm))
-             << QVariant::fromValue(quint16(portNumber));
+             << QVariant::fromValue(quint8(portNumber));
     protocolDescriptorList.append(QVariant::fromValue(protocol));
     serviceInfo_.setAttribute(QBluetoothServiceInfo::ProtocolDescriptorList, protocolDescriptorList);
 }

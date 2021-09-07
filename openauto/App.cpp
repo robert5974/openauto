@@ -33,22 +33,30 @@ App::App(boost::asio::io_service& ioService, aasdk::usb::USBWrapper& usbWrapper,
     , strand_(ioService_)
     , androidAutoEntityFactory_(androidAutoEntityFactory)
     , usbHub_(std::move(usbHub))
+    , acceptor_(ioService_, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), 5000))
     , connectedAccessoriesEnumerator_(std::move(connectedAccessoriesEnumerator))
     , isStopped_(false)
 {
 
 }
 
-void App::waitForUSBDevice()
+void App::waitForDevice(bool enumerate)
 {
-    strand_.dispatch([this, self = this->shared_from_this()]() {
-        this->waitForDevice();
-        this->enumerateDevices();
-    });
+    this->waitForUSBDevice();
+    this->waitForWirelessDevice();
+
+    if(enumerate)
+    {
+        strand_.dispatch([this, self = this->shared_from_this()]() {
+            this->enumerateDevices();
+        });
+    }
 }
 
 void App::start(aasdk::tcp::ITCPEndpoint::SocketPointer socket)
 {
+    OPENAUTO_LOG(info) << "[App] Wireless Device connected.";
+
     strand_.dispatch([this, self = this->shared_from_this(), socket = std::move(socket)]() mutable {
         if(androidAutoEntity_ != nullptr)
         {
@@ -93,7 +101,7 @@ void App::stop()
 
 void App::aoapDeviceHandler(aasdk::usb::DeviceHandle deviceHandle)
 {
-    OPENAUTO_LOG(info) << "[App] Device connected.";
+    OPENAUTO_LOG(info) << "[App] USB Device connected.";
 
     if(androidAutoEntity_ != nullptr)
     {
@@ -131,14 +139,22 @@ void App::enumerateDevices()
     connectedAccessoriesEnumerator_->enumerate(std::move(promise));
 }
 
-void App::waitForDevice()
+void App::waitForUSBDevice()
 {
-    OPENAUTO_LOG(info) << "[App] Waiting for device...";
+    OPENAUTO_LOG(info) << "[App] Waiting for USB device...";
 
     auto promise = aasdk::usb::IUSBHub::Promise::defer(strand_);
     promise->then(std::bind(&App::aoapDeviceHandler, this->shared_from_this(), std::placeholders::_1),
                   std::bind(&App::onUSBHubError, this->shared_from_this(), std::placeholders::_1));
     usbHub_->start(std::move(promise));
+}
+
+void App::waitForWirelessDevice()
+{
+    OPENAUTO_LOG(info) << "[App] Waiting for Wireless device...";
+
+    auto socket = std::make_shared<boost::asio::ip::tcp::socket>(ioService_);
+    acceptor_.async_accept(*socket, [this, socket](const boost::system::error_code &) { this->start(socket); });
 }
 
 void App::onAndroidAutoQuit()

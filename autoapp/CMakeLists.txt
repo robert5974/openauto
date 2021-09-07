@@ -21,7 +21,7 @@ target_link_libraries(autoapp
         openauto
         )
 
-if(RPI_BUILD)
+if(RPI_BUILD AND NOT GST_BUILD)
     target_link_libraries(autoapp omx)
 endif()
 

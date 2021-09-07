@@ -76,6 +76,17 @@ public:
     virtual void setSpeechAudioChannelEnabled(bool value) = 0;
     virtual AudioOutputBackendType getAudioOutputBackendType() const = 0;
     virtual void setAudioOutputBackendType(AudioOutputBackendType value) = 0;
+
+    virtual std::string getWifiSSID() = 0;
+    virtual void setWifiSSID(std::string value) = 0;
+    virtual std::string getWifiPassword() = 0;
+    virtual void setWifiPassword(std::string value) = 0;
+    virtual std::string getWifiMAC() = 0;
+    virtual void setWifiMAC(std::string value) = 0;
+    virtual bool getAutoconnectBluetooth() = 0;
+    virtual void setAutoconnectBluetooth(bool value) = 0;
+    virtual std::string getLastBluetoothPair() = 0;
+    virtual void setLastBluetoothPair(std::string value) = 0;
 };
 
 }

@@ -1,58 +1,74 @@
-/*
-*  This file is part of openauto project.
-*  Copyright (C) 2018 f1x.studio (Michal Szwaj)
-*
-*  openauto is free software: you can redistribute it and/or modify
-*  it under the terms of the GNU General Public License as published by
-*  the Free Software Foundation; either version 3 of the License, or
-*  (at your option) any later version.
+#include "btservice/btservice.hpp"
 
-*  openauto is distributed in the hope that it will be useful,
-*  but WITHOUT ANY WARRANTY; without even the implied warranty of
-*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-*  GNU General Public License for more details.
-*
-*  You should have received a copy of the GNU General Public License
-*  along with openauto. If not, see <http://www.gnu.org/licenses/>.
-*/
-
-#include <QApplication>
-#include "OpenautoLog.hpp"
-#include "btservice/AndroidBluetoothService.hpp"
-#include "btservice/AndroidBluetoothServer.hpp"
-
-namespace btservice = openauto::btservice;
-
-int main(int argc, char* argv[])
+namespace openauto
 {
-    QApplication qApplication(argc, argv);
+namespace btservice
+{
 
-    const QBluetoothAddress address;
-    const uint16_t portNumber = 5000;
-
-    btservice::AndroidBluetoothServer androidBluetoothServer;
-    if(!androidBluetoothServer.start(address, portNumber))
+btservice::btservice(openauto::configuration::IConfiguration::Pointer config)
+    : androidBluetoothService_(cServicePortNumber)
+    , androidBluetoothServer_(config)
+{
+    QBluetoothAddress address;
+    auto adapters = QBluetoothLocalDevice::allDevices();
+    if(adapters.size() > 0)
     {
-        OPENAUTO_LOG(error) << "[btservice] Server start failed.";
-        return 2;
-    }
-
-    OPENAUTO_LOG(info) << "[btservice] Listening for connections, address: " << address.toString().toStdString()
-                       << ", port: " << portNumber;
-
-    btservice::AndroidBluetoothService androidBluetoothService(portNumber);
-    if(!androidBluetoothService.registerService(address))
-    {
-        OPENAUTO_LOG(error) << "[btservice] Service registration failed.";
-        return 1;
+        address = adapters.at(0).address();
     }
     else
     {
-        OPENAUTO_LOG(info) << "[btservice] Service registered, port: " << portNumber;
+        OPENAUTO_LOG(error) << "[btservice] No adapter found.";
     }
 
-    qApplication.exec();
-    androidBluetoothService.unregisterService();
+    if(!androidBluetoothServer_.start(address, cServicePortNumber))
+    {
+        OPENAUTO_LOG(error) << "[btservice] Server start failed.";
+        return;
+    }
 
-    return 0;
+    OPENAUTO_LOG(info) << "[btservice] Listening for connections, address: " << address.toString().toStdString()
+                       << ", port: " << cServicePortNumber;
+
+    if(!androidBluetoothService_.registerService(address))
+    {
+        OPENAUTO_LOG(error) << "[btservice] Service registration failed.";
+    }
+    else
+    {
+        OPENAUTO_LOG(info) << "[btservice] Service registered, port: " << cServicePortNumber;
+    }
+    if(config->getAutoconnectBluetooth())
+        connectToBluetooth(QBluetoothAddress(QString::fromStdString(config->getLastBluetoothPair())), address);
+}
+
+void btservice::connectToBluetooth(QBluetoothAddress addr, QBluetoothAddress controller)
+{
+    // The raspberry pi has a really tough time using bluetoothctl (or really anything) to connect to an Android phone
+    // even though phone connecting to the pi is fine.
+    // I found a workaround where you can make the pi attempt an rfcomm connection to the phone, and it connects immediately
+    // This might require setting u+s on rfcomm though
+    // Other computers with more sane bluetooth shouldn't have an issue using bluetoothctl
+    
+#ifdef RPI
+    // tries to open an rfcomm serial on channel 2
+    // channel doesn't really matter here, 2 is just "somewhat standard"
+    QString program = QString::fromStdString("sudo stdbuf -oL rfcomm connect hci0 ")+addr.toString()+QString::fromStdString(" 2");
+    btConnectProcess = new QProcess();
+    OPENAUTO_LOG(info)<<"[btservice] Attempting to connect to last bluetooth device, "<<addr.toString().toStdString()<<" with `"<<program.toStdString();
+    btConnectProcess->start(program, QProcess::Unbuffered | QProcess::ReadWrite);
+#else
+    btConnectProcess = new QProcess();
+    btConnectProcess->setProcessChannelMode(QProcess::SeparateChannels);
+    OPENAUTO_LOG(info)<<"[btservice] Attempting to connect to last bluetooth device, "<<addr.toString().toStdString()<<" with bluetoothctl";
+    btConnectProcess->start("bluetoothctl");
+    btConnectProcess->waitForStarted();
+    btConnectProcess->write(QString("select %1\n").arg(controller.toString()).toUtf8());
+    btConnectProcess->write(QString("connect %1\n").arg(addr.toString()).toUtf8());
+    btConnectProcess->closeWriteChannel();
+    btConnectProcess->waitForFinished();
+#endif
+}
+
+
+}
 }

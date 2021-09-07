@@ -68,6 +68,17 @@ public:
     AudioOutputBackendType getAudioOutputBackendType() const override;
     void setAudioOutputBackendType(AudioOutputBackendType value) override;
 
+    std::string getWifiSSID() override;
+    void setWifiSSID(std::string value) override;
+    std::string getWifiPassword() override;
+    void setWifiPassword(std::string value) override;
+    std::string getWifiMAC() override;
+    void setWifiMAC(std::string value) override;
+    bool getAutoconnectBluetooth() override;
+    void setAutoconnectBluetooth(bool value) override;
+    std::string getLastBluetoothPair() override;
+    void setLastBluetoothPair(std::string value) override;
+
 private:
     void readButtonCodes(boost::property_tree::ptree& iniConfig);
     void insertButtonCode(boost::property_tree::ptree& iniConfig, const std::string& buttonCodeKey, aasdk::proto::enums::ButtonCode::Enum buttonCode);
@@ -87,6 +98,11 @@ private:
     bool musicAudioChannelEnabled_;
     bool speechAudiochannelEnabled_;
     AudioOutputBackendType audioOutputBackendType_;
+    std::string wifiSSID_;
+    std::string wifiPassword_;
+    std::string wifiMAC_;
+    bool autoconnectBluetooth_;
+    std::string lastBluetoothPair_;
 
     static const std::string cConfigFileName;
 
@@ -124,6 +140,12 @@ private:
     static const std::string cInputScrollWheelButtonKey;
     static const std::string cInputBackButtonKey;
     static const std::string cInputEnterButtonKey;
+
+    static const std::string cWifiSSID;
+    static const std::string cWifiPskey;
+    static const std::string cWifiMAC;
+    static const std::string cAutoconnectBluetooth;
+    static const std::string cLastBluetoothPair;
 };
 
 }

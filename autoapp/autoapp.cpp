@@ -123,7 +123,7 @@ int main(int argc, char* argv[])
         app->start(std::move(socket));
     });
 
-    app->waitForUSBDevice();
+    app->waitForDevice(true);
 
     auto result = qApplication.exec();
     std::for_each(threadPool.begin(), threadPool.end(), std::bind(&std::thread::join, std::placeholders::_1));

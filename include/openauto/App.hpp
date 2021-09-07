@@ -37,7 +37,7 @@ public:
     App(boost::asio::io_service& ioService, aasdk::usb::USBWrapper& usbWrapper, aasdk::tcp::ITCPWrapper& tcpWrapper, openauto::service::IAndroidAutoEntityFactory& androidAutoEntityFactory,
         aasdk::usb::IUSBHub::Pointer usbHub, aasdk::usb::IConnectedAccessoriesEnumerator::Pointer connectedAccessoriesEnumerator);
 
-    void waitForUSBDevice();
+    void waitForDevice(bool enumerate = false);
     void start(aasdk::tcp::ITCPEndpoint::SocketPointer socket);
     void stop();
     void onAndroidAutoQuit() override;
@@ -45,7 +45,8 @@ public:
 private:
     using std::enable_shared_from_this<App>::shared_from_this;
     void enumerateDevices();
-    void waitForDevice();
+    void waitForUSBDevice();
+    void waitForWirelessDevice();
     void aoapDeviceHandler(aasdk::usb::DeviceHandle deviceHandle);
     void onUSBHubError(const aasdk::error::Error& error);
 
@@ -55,6 +56,7 @@ private:
     boost::asio::io_service::strand strand_;
     openauto::service::IAndroidAutoEntityFactory& androidAutoEntityFactory_;
     aasdk::usb::IUSBHub::Pointer usbHub_;
+    boost::asio::ip::tcp::acceptor acceptor_;
     aasdk::usb::IConnectedAccessoriesEnumerator::Pointer connectedAccessoriesEnumerator_;
     openauto::service::IAndroidAutoEntity::Pointer androidAutoEntity_;
     bool isStopped_;
