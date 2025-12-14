@@ -94,7 +94,7 @@ target_include_directories(openauto SYSTEM PUBLIC
 target_link_libraries(openauto PRIVATE
         ${QTGSTREAMER_LIBRARY}
         ${GST_LIBRARIES}
-        ${Qt5QuickWidgets_LIBRARIES}
+        ${Qt6QuickWidgets_LIBRARIES}
         ${QTGSTREAMER_QUICK_LIBRARY}
         )
 endif()
@@ -111,8 +111,8 @@ target_link_libraries(openauto PUBLIC
         ${Boost_LIBRARIES}
         aasdk
         rtaudio
-        Qt5::Bluetooth
-        Qt5::MultimediaWidgets
+        Qt6::Bluetooth
+        Qt6::MultimediaWidgets
         btservice_proto
         ${Protobuf_LIBRARIES}
         )

@@ -57,7 +57,7 @@ endif()
 
 if(GST_BUILD)
     find_package(GObject)
-    find_package(Qt5GStreamer)
+    find_package(Qt6GStreamer)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(GST REQUIRED
                       gstreamer-1.0>=1.4
