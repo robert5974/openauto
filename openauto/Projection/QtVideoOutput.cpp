@@ -20,7 +20,6 @@
 #include "OpenautoLog.hpp"
 #include <QApplication>
 
-
 namespace openauto {
 namespace projection {
 
@@ -76,7 +75,7 @@ void QtVideoOutput::onStartPlayback() {
   videoWidget_->show();
 
   mediaPlayer_->setVideoOutput(videoWidget_.get());
-  mediaPlayer_->setMedia(QMediaContent(), &videoBuffer_);
+  mediaPlayer_->setSourceDevice(&videoBuffer_, QUrl());
   mediaPlayer_->play();
 }
 
