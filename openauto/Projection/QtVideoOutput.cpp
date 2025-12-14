@@ -16,88 +16,74 @@
 *  along with openauto. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <QApplication>
 #include "openauto/Projection/QtVideoOutput.hpp"
 #include "OpenautoLog.hpp"
+#include <QApplication>
 
-namespace openauto
-{
-namespace projection
-{
 
-QtVideoOutput::QtVideoOutput(configuration::IConfiguration::Pointer configuration, QWidget* videoContainer)
-    : VideoOutput(std::move(configuration))
-    , videoContainer_(videoContainer)
-{
-    this->moveToThread(QApplication::instance()->thread());
-    connect(this, &QtVideoOutput::startPlayback, this, &QtVideoOutput::onStartPlayback, Qt::QueuedConnection);
-    connect(this, &QtVideoOutput::stopPlayback, this, &QtVideoOutput::onStopPlayback, Qt::QueuedConnection);
+namespace openauto {
+namespace projection {
 
-    QMetaObject::invokeMethod(this, "createVideoOutput", Qt::BlockingQueuedConnection);
+QtVideoOutput::QtVideoOutput(
+    configuration::IConfiguration::Pointer configuration,
+    QWidget *videoContainer)
+    : VideoOutput(std::move(configuration)), videoContainer_(videoContainer) {
+  this->moveToThread(QApplication::instance()->thread());
+  connect(this, &QtVideoOutput::startPlayback, this,
+          &QtVideoOutput::onStartPlayback, Qt::QueuedConnection);
+  connect(this, &QtVideoOutput::stopPlayback, this,
+          &QtVideoOutput::onStopPlayback, Qt::QueuedConnection);
+
+  QMetaObject::invokeMethod(this, "createVideoOutput",
+                            Qt::BlockingQueuedConnection);
 }
 
-void QtVideoOutput::createVideoOutput()
-{
-    OPENAUTO_LOG(debug) << "[QtVideoOutput] create.";
-    videoWidget_ = std::make_unique<QVideoWidget>(videoContainer_);
-    mediaPlayer_ = std::make_unique<QMediaPlayer>(nullptr, QMediaPlayer::StreamPlayback);
+void QtVideoOutput::createVideoOutput() {
+  OPENAUTO_LOG(debug) << "[QtVideoOutput] create.";
+  videoWidget_ = std::make_unique<QVideoWidget>(videoContainer_);
+  mediaPlayer_ = std::make_unique<QMediaPlayer>();
 }
 
+bool QtVideoOutput::open() { return videoBuffer_.open(QIODevice::ReadWrite); }
 
-bool QtVideoOutput::open()
-{
-    return videoBuffer_.open(QIODevice::ReadWrite);
+bool QtVideoOutput::init() {
+  emit startPlayback();
+  return true;
 }
 
-bool QtVideoOutput::init()
-{
-    emit startPlayback();
-    return true;
+void QtVideoOutput::stop() { emit stopPlayback(); }
+
+void QtVideoOutput::write(uint64_t,
+                          const aasdk::common::DataConstBuffer &buffer) {
+  videoBuffer_.write(reinterpret_cast<const char *>(buffer.cdata), buffer.size);
 }
 
-void QtVideoOutput::stop()
-{
-    emit stopPlayback();
+void QtVideoOutput::resize() {
+  if (videoWidget_ != nullptr && videoContainer_ != nullptr) {
+    videoWidget_->resize(videoContainer_->size());
+  }
 }
 
-void QtVideoOutput::write(uint64_t, const aasdk::common::DataConstBuffer& buffer)
-{
-    videoBuffer_.write(reinterpret_cast<const char*>(buffer.cdata), buffer.size);
+void QtVideoOutput::onStartPlayback() {
+  if (videoContainer_ == nullptr) {
+    videoWidget_->setAspectRatioMode(Qt::IgnoreAspectRatio);
+    videoWidget_->setFocus();
+    videoWidget_->setWindowFlags(Qt::WindowStaysOnTopHint);
+    videoWidget_->setFullScreen(true);
+  } else {
+    videoWidget_->resize(videoContainer_->size());
+  }
+  videoWidget_->show();
+
+  mediaPlayer_->setVideoOutput(videoWidget_.get());
+  mediaPlayer_->setMedia(QMediaContent(), &videoBuffer_);
+  mediaPlayer_->play();
 }
 
-void QtVideoOutput::resize()
-{
-    if(videoWidget_ != nullptr && videoContainer_ != nullptr)
-    {
-        videoWidget_->resize(videoContainer_->size());
-    }
+void QtVideoOutput::onStopPlayback() {
+  videoWidget_->hide();
+  mediaPlayer_->stop();
 }
 
-void QtVideoOutput::onStartPlayback()
-{
-    if(videoContainer_ == nullptr)
-    {
-        videoWidget_->setAspectRatioMode(Qt::IgnoreAspectRatio);
-        videoWidget_->setFocus();
-        videoWidget_->setWindowFlags(Qt::WindowStaysOnTopHint);
-        videoWidget_->setFullScreen(true);
-    }
-    else
-    {
-        videoWidget_->resize(videoContainer_->size());
-    }
-    videoWidget_->show();
-
-    mediaPlayer_->setVideoOutput(videoWidget_.get());
-    mediaPlayer_->setMedia(QMediaContent(), &videoBuffer_);
-    mediaPlayer_->play();
-}
-
-void QtVideoOutput::onStopPlayback()
-{
-    videoWidget_->hide();
-    mediaPlayer_->stop();
-}
-
-}
-}
+} // namespace projection
+} // namespace openauto
