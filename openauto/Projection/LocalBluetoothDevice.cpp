@@ -20,7 +20,6 @@
 #include "OpenautoLog.hpp"
 #include <QApplication>
 
-
 namespace openauto {
 namespace projection {
 
@@ -89,7 +88,6 @@ void LocalBluetoothDevice::onStartPairing(const QString &address,
 
   promise->reject();
 }
-}
 
 void LocalBluetoothDevice::onError(QBluetoothLocalDevice::Error error) {
   OPENAUTO_LOG(debug) << "[LocalBluetoothDevice] onError, error: " << error;
@@ -115,5 +113,5 @@ void LocalBluetoothDevice::onHostModeStateChanged(
   }
 }
 
-}
-}
+} // namespace projection
+} // namespace openauto
