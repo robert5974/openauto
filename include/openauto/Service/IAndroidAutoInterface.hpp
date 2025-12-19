@@ -58,7 +58,7 @@ public:
         if(m_serviceFactory != NULL)
         {
             
-            m_serviceFactory->sendButtonPress(buttonCode, wheelDirection, buttonEventType);
+            m_serviceFactory->sendButtonPress(buttonCode, wheelDirection);
         }
     }
     void injectButtonPress(aasdk::proto::enums::ButtonCode::Enum buttonCode, projection::ButtonEventType buttonEventType)

@@ -1,0 +1,6 @@
+set(__QT_DEPLOY_TARGET_btservice_proto_FILE /mnt/c/Users/Robert/Documents/GitHub/opendash2/openauto/lib/libbtservice_proto.so)
+set(__QT_DEPLOY_TARGET_btservice_proto_TYPE SHARED_LIBRARY)
+set(__QT_DEPLOY_TARGET_openauto_FILE /mnt/c/Users/Robert/Documents/GitHub/opendash2/openauto/lib/libopenauto.so.2.1.02a1cef)
+set(__QT_DEPLOY_TARGET_openauto_TYPE SHARED_LIBRARY)
+set(__QT_DEPLOY_TARGET_autoapp_FILE /mnt/c/Users/Robert/Documents/GitHub/opendash2/openauto/bin/autoapp)
+set(__QT_DEPLOY_TARGET_autoapp_TYPE EXECUTABLE)
