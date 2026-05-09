@@ -8,6 +8,12 @@ add_library(btservice_proto SHARED ${proto_headers} ${proto_sources})
 target_link_libraries(btservice_proto ${PROTOBUF_LIBRARIES})
 
 install(TARGETS btservice_proto DESTINATION lib)
-install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DESTINATION include
+
+add_custom_command(TARGET btservice_proto POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/include/btservice_proto
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${proto_headers} ${CMAKE_SOURCE_DIR}/include/btservice_proto/
+)
+
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/btservice_proto DESTINATION include
         FILES_MATCHING PATTERN *.h
         PATTERN CMakeFiles EXCLUDE)
