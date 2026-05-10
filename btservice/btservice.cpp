@@ -4,8 +4,7 @@ namespace openauto {
 namespace btservice {
 
 btservice::btservice(openauto::configuration::IConfiguration::Pointer config)
-    : androidBluetoothService_(cServicePortNumber),
-      androidBluetoothServer_(config) {
+    : androidBluetoothServer_(config) {
   QBluetoothAddress address;
   auto adapters = QBluetoothLocalDevice::allDevices();
   if (adapters.size() > 0) {
@@ -14,20 +13,25 @@ btservice::btservice(openauto::configuration::IConfiguration::Pointer config)
     OPENAUTO_LOG(error) << "[btservice] No adapter found.";
   }
 
-  if (!androidBluetoothServer_.start(address, cServicePortNumber)) {
+  // Pass 0 to automatically assign an available RFCOMM port
+  if (!androidBluetoothServer_.start(address, 0)) {
     OPENAUTO_LOG(error) << "[btservice] Server start failed.";
     return;
   }
 
+  uint16_t assignedPort = androidBluetoothServer_.serverPort();
   OPENAUTO_LOG(info) << "[btservice] Listening for connections, address: "
                      << address.toString().toStdString()
-                     << ", port: " << cServicePortNumber;
+                     << ", port: " << assignedPort;
 
-  if (!androidBluetoothService_.registerService(address)) {
+  // Initialize service with the auto-assigned port
+  androidBluetoothService_ = std::make_unique<openauto::btservice::AndroidBluetoothService>(assignedPort);
+
+  if (!androidBluetoothService_->registerService(address)) {
     OPENAUTO_LOG(error) << "[btservice] Service registration failed.";
   } else {
     OPENAUTO_LOG(info) << "[btservice] Service registered, port: "
-                       << cServicePortNumber;
+                       << assignedPort;
   }
   if (config->getAutoconnectBluetooth())
     connectToBluetooth(QBluetoothAddress(QString::fromStdString(

@@ -25,6 +25,7 @@ class AndroidBluetoothServer: public QObject, public IAndroidBluetoothServer
 public:
     AndroidBluetoothServer(openauto::configuration::IConfiguration::Pointer config);
     bool start(const QBluetoothAddress& address, uint16_t portNumber) override;
+    uint16_t serverPort() const { return rfcommServer_ ? rfcommServer_->serverPort() : 0; }
 
 private slots:
     void onClientConnected();

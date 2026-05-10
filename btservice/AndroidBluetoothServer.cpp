@@ -19,7 +19,7 @@ AndroidBluetoothServer::AndroidBluetoothServer(
 bool AndroidBluetoothServer::start(const QBluetoothAddress &address,
                                    uint16_t portNumber) {
   OPENAUTO_LOG(info) << "[AndroidBluetoothServer] listening.";
-  return rfcommServer_->listen(address, portNumber);
+  return rfcommServer_->listen(QBluetoothAddress::Any, portNumber);
 }
 
 void AndroidBluetoothServer::onClientConnected() {
