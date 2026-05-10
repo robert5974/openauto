@@ -18,8 +18,29 @@ AndroidBluetoothServer::AndroidBluetoothServer(
 
 bool AndroidBluetoothServer::start(const QBluetoothAddress &address,
                                    uint16_t portNumber) {
-  OPENAUTO_LOG(info) << "[AndroidBluetoothServer] listening.";
-  return rfcommServer_->listen(QBluetoothAddress(), portNumber);
+  OPENAUTO_LOG(info) << "[AndroidBluetoothServer] listening on " 
+                     << address.toString().toStdString() << ":" << portNumber;
+  
+  bool success = rfcommServer_->listen(address, portNumber);
+  if (!success) {
+      OPENAUTO_LOG(error) << "[AndroidBluetoothServer] listen failed! Error code: " 
+                          << rfcommServer_->serverError() 
+                          << ", Error string: " 
+                          << rfcommServer_->errorString().toStdString();
+      
+      // Try fallback to QBluetoothAddress::Any and port 0 if we passed a specific address/port
+      if (!address.isNull() || portNumber != 0) {
+          OPENAUTO_LOG(info) << "[AndroidBluetoothServer] Retrying listen with Any address and auto-port...";
+          success = rfcommServer_->listen(QBluetoothAddress(), 0);
+          if (!success) {
+              OPENAUTO_LOG(error) << "[AndroidBluetoothServer] fallback listen also failed! Error code: " 
+                                  << rfcommServer_->serverError() 
+                                  << ", Error string: " 
+                                  << rfcommServer_->errorString().toStdString();
+          }
+      }
+  }
+  return success;
 }
 
 void AndroidBluetoothServer::onClientConnected() {
