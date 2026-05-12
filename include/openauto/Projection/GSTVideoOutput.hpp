@@ -30,18 +30,6 @@
 #include <gst/app/gstappsrc.h>
 #include <gst/app/gstappsink.h>
 #include <gst/video/video.h>
-#include <QGlib/Error>
-#include <QGlib/Connect>
-#include <QGst/Init>
-#include <QGst/Bus>
-#include <QGst/Pipeline>
-#include <QGst/Parse>
-#include <QGst/Message>
-#include <QGst/Utils/ApplicationSink>
-#include <QGst/Utils/ApplicationSource>
-#include <QGst/Ui/VideoWidget>
-#include <QGst/ElementFactory>
-#include <QGst/Quick/VideoSurface>
 #include <QtQml/QQmlContext>
 #include <QtQuickWidgets/QQuickWidget>
 #include <QApplication>
@@ -76,13 +64,11 @@ private:
     static GstPadProbeReturn convertProbe(GstPad* pad, GstPadProbeInfo* info, void*);
     static gboolean busCallback(GstBus*, GstMessage* message, gpointer*);
 
-    QGst::ElementPtr videoSink_;
     QQuickWidget* videoWidget_;
     GstElement* vidPipeline_;
     GstVideoFilter* vidCrop_;
     GstAppSrc* vidSrc_;
     QWidget* videoContainer_;
-    QGst::Quick::VideoSurface* surface_;
     std::function<void(bool)> activeCallback_;
 };
 

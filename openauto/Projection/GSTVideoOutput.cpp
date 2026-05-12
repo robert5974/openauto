@@ -20,6 +20,7 @@
 #include "openauto/Projection/GSTVideoOutput.hpp"
 #include "OpenautoLog.hpp"
 #include "aasdk/Common/Data.hpp"
+#include <QQuickItem>
 
 
 namespace openauto {
@@ -33,13 +34,8 @@ GSTVideoOutput::GSTVideoOutput(
   this->moveToThread(QApplication::instance()->thread());
   videoWidget_ = new QQuickWidget(videoContainer_);
 
-  surface_ = new QGst::Quick::VideoSurface;
-  videoWidget_->rootContext()->setContextProperty(QLatin1String("videoSurface"),
-                                                  surface_);
   videoWidget_->setSource(QUrl("qrc:/aa_video.qml"));
   videoWidget_->setResizeMode(QQuickWidget::SizeRootObjectToView);
-
-  videoSink_ = surface_->videoSink();
 
   GError *error = nullptr;
   const char *vidLaunchStr =
@@ -55,7 +51,7 @@ GSTVideoOutput::GSTVideoOutput(
       "avdec_h264 ! "
 #endif
       "videocrop top=0 bottom=0 name=videocropper ! capsfilter "
-      "caps=video/x-raw name=mycapsfilter";
+      "caps=video/x-raw name=mycapsfilter ! glupload ! qml6glsink name=mysink sync=false async=false";
 #ifdef RPI
   OPENAUTO_LOG(info) << "[GSTVideoOutput] RPI Build, running with " <<
 #ifdef PI4
@@ -70,15 +66,15 @@ GSTVideoOutput::GSTVideoOutput(
   gst_bus_add_watch(bus, (GstBusFunc)&GSTVideoOutput::busCallback, this);
   gst_object_unref(bus);
 
-  GstElement *sink = QGlib::RefPointer<QGst::Element>(videoSink_);
+  GstElement *sink = gst_bin_get_by_name(GST_BIN(vidPipeline_), "mysink");
+  QQuickItem *videoItem = videoWidget_->rootObject()->findChild<QQuickItem*>("videoItem");
+  if (videoItem) {
+    g_object_set(sink, "widget", videoItem, nullptr);
+  } else {
+    OPENAUTO_LOG(error) << "[GSTVideoOutput] Failed to find QQuickItem 'videoItem'";
+  }
   g_object_set(sink, "force-aspect-ratio", false, nullptr);
-  g_object_set(sink, "sync", false, nullptr);
-  g_object_set(sink, "async", false, nullptr);
-
-  GstElement *capsFilter =
-      gst_bin_get_by_name(GST_BIN(vidPipeline_), "mycapsfilter");
-  gst_bin_add(GST_BIN(vidPipeline_), GST_ELEMENT(sink));
-  gst_element_link(capsFilter, GST_ELEMENT(sink));
+  gst_object_unref(sink);
 
   vidSrc_ = GST_APP_SRC(gst_bin_get_by_name(GST_BIN(vidPipeline_), "mysrc"));
   gst_app_src_set_stream_type(vidSrc_, GST_APP_STREAM_TYPE_STREAM);

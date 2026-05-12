@@ -17,6 +17,9 @@
 */
 
 #include <thread>
+#ifdef USE_GST
+#include <gst/gst.h>
+#endif
 #include <QApplication>
 #include "aasdk/USB/USBHub.hpp"
 #include "aasdk/USB/ConnectedAccessoriesEnumerator.hpp"
@@ -82,6 +85,9 @@ int main(int argc, char* argv[])
     startUSBWorkers(ioService, usbContext, threadPool);
     startIOServiceWorkers(ioService, threadPool);
 
+#ifdef USE_GST
+    gst_init(&argc, &argv);
+#endif
     QApplication qApplication(argc, argv);
     autoapp::ui::MainWindow mainWindow;
     mainWindow.setWindowFlags(Qt::WindowStaysOnTopHint);
