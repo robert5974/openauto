@@ -90,7 +90,7 @@ target_include_directories(openauto SYSTEM PUBLIC
         ${GST_INCLUDE_DIRS}
         )
 
-target_link_libraries(openauto PRIVATE
+target_link_libraries(openauto PUBLIC
         ${GST_LIBRARIES}
         ${Qt6QuickWidgets_LIBRARIES}
         )
