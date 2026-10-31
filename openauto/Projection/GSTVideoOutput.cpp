@@ -32,6 +32,12 @@ GSTVideoOutput::GSTVideoOutput(
     : VideoOutput(std::move(configuration)), videoContainer_(videoContainer),
       activeCallback_(activeCallback) {
   this->moveToThread(QApplication::instance()->thread());
+
+  // Ensure qml6glsink plugin is loaded and registers org.freedesktop.gstreamer.Qt6GLVideoItem before QML loads
+  if (GstElement *dummySink = gst_element_factory_make("qml6glsink", nullptr)) {
+    gst_object_unref(dummySink);
+  }
+
   videoWidget_ = new QQuickWidget(videoContainer_);
 
   videoWidget_->setSource(QUrl("qrc:/aa_video.qml"));
@@ -67,14 +73,26 @@ GSTVideoOutput::GSTVideoOutput(
   gst_object_unref(bus);
 
   GstElement *sink = gst_bin_get_by_name(GST_BIN(vidPipeline_), "mysink");
-  QQuickItem *videoItem = videoWidget_->rootObject()->findChild<QQuickItem*>("videoItem");
-  if (videoItem) {
-    g_object_set(sink, "widget", videoItem, nullptr);
-  } else {
-    OPENAUTO_LOG(error) << "[GSTVideoOutput] Failed to find QQuickItem 'videoItem'";
+  QQuickItem *rootObj = videoWidget_->rootObject();
+  QQuickItem *videoItem = (rootObj != nullptr)
+                              ? rootObj->findChild<QQuickItem *>("videoItem")
+                              : qobject_cast<QQuickItem *>(rootObj);
+  if (videoItem == nullptr && rootObj != nullptr &&
+      rootObj->objectName() == "videoItem") {
+    videoItem = rootObj;
   }
-  g_object_set(sink, "force-aspect-ratio", false, nullptr);
-  gst_object_unref(sink);
+  if (sink != nullptr) {
+    if (videoItem != nullptr) {
+      g_object_set(sink, "widget", videoItem, nullptr);
+    } else {
+      OPENAUTO_LOG(error)
+          << "[GSTVideoOutput] Failed to find QQuickItem 'videoItem'";
+    }
+    g_object_set(sink, "force-aspect-ratio", false, nullptr);
+    gst_object_unref(sink);
+  } else {
+    OPENAUTO_LOG(error) << "[GSTVideoOutput] Failed to find GstElement 'mysink'";
+  }
 
   vidSrc_ = GST_APP_SRC(gst_bin_get_by_name(GST_BIN(vidPipeline_), "mysrc"));
   gst_app_src_set_stream_type(vidSrc_, GST_APP_STREAM_TYPE_STREAM);

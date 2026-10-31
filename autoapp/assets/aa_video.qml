@@ -1,5 +1,5 @@
 import QtQuick
-import org.freedesktop.gstreamer.GLVideoItem 1.0
+import org.freedesktop.gstreamer.Qt6GLVideoItem 1.0
 
 GstGLVideoItem {
       id: aaVideo
