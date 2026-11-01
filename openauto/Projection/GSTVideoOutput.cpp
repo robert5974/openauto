@@ -21,6 +21,8 @@
 #include "OpenautoLog.hpp"
 #include "aasdk/Common/Data.hpp"
 #include <QQuickItem>
+#include <QQuickWindow>
+#include <QTimer>
 
 
 namespace openauto {
@@ -33,15 +35,23 @@ GSTVideoOutput::GSTVideoOutput(
       activeCallback_(activeCallback) {
   this->moveToThread(QApplication::instance()->thread());
 
+  QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+
   // Ensure qml6glsink plugin is loaded and registers org.freedesktop.gstreamer.Qt6GLVideoItem before QML loads
   if (GstElement *dummySink = gst_element_factory_make("qml6glsink", nullptr)) {
     gst_object_unref(dummySink);
   }
 
   videoWidget_ = new QQuickWidget(videoContainer_);
+  videoWidget_->setClearColor(Qt::black);
 
   videoWidget_->setSource(QUrl("qrc:/aa_video.qml"));
   videoWidget_->setResizeMode(QQuickWidget::SizeRootObjectToView);
+
+  if (QQuickWindow *qw = videoWidget_->quickWindow()) {
+    connect(qw, &QQuickWindow::sceneGraphInitialized, this,
+            &GSTVideoOutput::tryStartPipeline, Qt::QueuedConnection);
+  }
 
   GError *error = nullptr;
   const char *vidLaunchStr =
@@ -56,7 +66,7 @@ GSTVideoOutput::GSTVideoOutput(
 #else
       "avdec_h264 ! "
 #endif
-      "videocrop top=0 bottom=0 name=videocropper ! capsfilter "
+      "videocrop top=0 bottom=0 name=videocropper ! videoconvert ! capsfilter "
       "caps=video/x-raw name=mycapsfilter ! glupload ! qml6glsink name=mysink sync=false async=false";
 #ifdef RPI
   OPENAUTO_LOG(info) << "[GSTVideoOutput] RPI Build, running with " <<
@@ -146,14 +156,62 @@ gboolean GSTVideoOutput::busCallback(GstBus *, GstMessage *message,
 }
 
 bool GSTVideoOutput::open() {
-  GstElement *capsFilter =
-      gst_bin_get_by_name(GST_BIN(vidPipeline_), "mycapsfilter");
-  GstPad *convertPad = gst_element_get_static_pad(capsFilter, "sink");
-  gst_pad_add_probe(convertPad, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM,
-                    &GSTVideoOutput::convertProbe, this, nullptr);
-  gst_element_set_state(vidPipeline_, GST_STATE_PLAYING);
+  {
+    std::lock_guard<std::mutex> lock(bufferMutex_);
+    pendingBuffers_.clear();
+    playbackRequested_ = true;
+    pipelineActive_ = false;
+  }
 
+  if (!probeAdded_) {
+    GstElement *capsFilter =
+        gst_bin_get_by_name(GST_BIN(vidPipeline_), "mycapsfilter");
+    if (capsFilter != nullptr) {
+      GstPad *convertPad = gst_element_get_static_pad(capsFilter, "sink");
+      if (convertPad != nullptr) {
+        gst_pad_add_probe(convertPad, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM,
+                          &GSTVideoOutput::convertProbe, this, nullptr);
+        gst_object_unref(convertPad);
+      }
+      gst_object_unref(capsFilter);
+    }
+    probeAdded_ = true;
+  }
+
+  QMetaObject::invokeMethod(this, "onStartPlayback", Qt::QueuedConnection);
   return true;
+}
+
+void GSTVideoOutput::tryStartPipeline() {
+  std::lock_guard<std::mutex> lock(bufferMutex_);
+  if (!playbackRequested_) {
+    return;
+  }
+  if (!pipelineActive_) {
+    GstStateChangeReturn ret =
+        gst_element_set_state(vidPipeline_, GST_STATE_PLAYING);
+    if (ret == GST_STATE_CHANGE_FAILURE) {
+      OPENAUTO_LOG(debug) << "[GSTVideoOutput] Waiting for QML scene graph "
+                             "before transitioning pipeline to PLAYING";
+      QTimer::singleShot(40, this, &GSTVideoOutput::tryStartPipeline);
+      return;
+    }
+    OPENAUTO_LOG(info)
+        << "[GSTVideoOutput] Pipeline transitioned to PLAYING (ret=" << ret
+        << "), flushing " << pendingBuffers_.size() << " buffered packets";
+    pipelineActive_ = true;
+  }
+
+  for (const auto &pkt : pendingBuffers_) {
+    GstBuffer *buf = gst_buffer_new_and_alloc(pkt.size());
+    gst_buffer_fill(buf, 0, pkt.data(), pkt.size());
+    int ret = gst_app_src_push_buffer((GstAppSrc *)vidSrc_, buf);
+    if (ret != GST_FLOW_OK) {
+      OPENAUTO_LOG(info) << "[GSTVideoOutput] flush buffer returned " << ret
+                         << " for " << pkt.size() << "bytes";
+    }
+  }
+  pendingBuffers_.clear();
 }
 
 GstPadProbeReturn GSTVideoOutput::convertProbe(GstPad *pad,
@@ -186,6 +244,14 @@ bool GSTVideoOutput::init() {
 
 void GSTVideoOutput::write(uint64_t timestamp,
                            const aasdk::common::DataConstBuffer &buffer) {
+  std::lock_guard<std::mutex> lock(bufferMutex_);
+  if (!pipelineActive_) {
+    if (pendingBuffers_.size() < 512) {
+      pendingBuffers_.emplace_back(buffer.cdata, buffer.cdata + buffer.size);
+    }
+    return;
+  }
+
   GstBuffer *buffer_ = gst_buffer_new_and_alloc(buffer.size);
   gst_buffer_fill(buffer_, 0, buffer.cdata, buffer.size);
   int ret = gst_app_src_push_buffer((GstAppSrc *)vidSrc_, buffer_);
@@ -209,20 +275,29 @@ void GSTVideoOutput::onStartPlayback() {
     videoWidget_->showFullScreen();
   } else {
     OPENAUTO_LOG(info) << "[GSTVideoOutput] Resizing to video container";
-    videoWidget_->resize(videoContainer_->size());
+    this->resize();
   }
   videoWidget_->show();
+  QCoreApplication::processEvents();
+  this->tryStartPipeline();
 }
 
 void GSTVideoOutput::stop() { emit stopPlayback(); }
 
 void GSTVideoOutput::onStopPlayback() {
+  {
+    std::lock_guard<std::mutex> lock(bufferMutex_);
+    playbackRequested_ = false;
+    pipelineActive_ = false;
+    pendingBuffers_.clear();
+  }
+
   if (activeCallback_ != nullptr) {
     activeCallback_(false);
   }
 
   OPENAUTO_LOG(info) << "[GSTVideoOutput] stop.";
-  gst_element_set_state(vidPipeline_, GST_STATE_PAUSED);
+  gst_element_set_state(vidPipeline_, GST_STATE_NULL);
   videoWidget_->hide();
 }
 

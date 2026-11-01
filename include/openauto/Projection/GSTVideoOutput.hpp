@@ -23,6 +23,8 @@
 #include <condition_variable>
 #include <functional>
 #include <thread>
+#include <vector>
+#include <cstdint>
 #include <boost/circular_buffer.hpp>
 #include <boost/noncopyable.hpp>
 #include "openauto/Projection/VideoOutput.hpp"
@@ -59,6 +61,7 @@ signals:
 protected slots:
     void onStartPlayback();
     void onStopPlayback();
+    void tryStartPipeline();
 
 private:
     static GstPadProbeReturn convertProbe(GstPad* pad, GstPadProbeInfo* info, void*);
@@ -70,6 +73,11 @@ private:
     GstAppSrc* vidSrc_;
     QWidget* videoContainer_;
     std::function<void(bool)> activeCallback_;
+    std::mutex bufferMutex_;
+    std::vector<std::vector<uint8_t>> pendingBuffers_;
+    bool playbackRequested_ = false;
+    bool pipelineActive_ = false;
+    bool probeAdded_ = false;
 };
 
 }
