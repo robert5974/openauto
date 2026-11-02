@@ -19,6 +19,11 @@
 #include "OpenautoLog.hpp"
 #include "openauto/Projection/IInputDeviceEventHandler.hpp"
 #include "openauto/Projection/InputDevice.hpp"
+#include <QApplication>
+#include <QMouseEvent>
+#include <QTouchEvent>
+#include <QWidget>
+#include <algorithm>
 
 namespace openauto
 {
@@ -42,6 +47,10 @@ void InputDevice::start(IInputDeviceEventHandler& eventHandler)
     OPENAUTO_LOG(info) << "[InputDevice] start.";
     eventHandler_ = &eventHandler;
     parent_.installEventFilter(this);
+    if(qApp != nullptr)
+    {
+        qApp->installEventFilter(this);
+    }
 }
 
 void InputDevice::stop()
@@ -50,6 +59,10 @@ void InputDevice::stop()
 
     OPENAUTO_LOG(info) << "[InputDevice] stop.";
     parent_.removeEventFilter(this);
+    if(qApp != nullptr)
+    {
+        qApp->removeEventFilter(this);
+    }
     eventHandler_ = nullptr;
 }
 
@@ -67,9 +80,76 @@ bool InputDevice::eventFilter(QObject* obj, QEvent* event)
                 return this->handleKeyEvent(event, key);
             }
         }
-        else if(event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease || event->type() == QEvent::MouseMove)
+        else if(event->type() == QEvent::TouchBegin || event->type() == QEvent::TouchUpdate ||
+                event->type() == QEvent::TouchEnd || event->type() == QEvent::TouchCancel)
         {
-            return this->handleTouchEvent(event);
+            QWidget* activeArea = qobject_cast<QWidget*>(&parent_);
+            if(activeArea != nullptr && activeArea->isVisible())
+            {
+                QWidget* target = qobject_cast<QWidget*>(obj);
+                bool isFloatingHome = false;
+                for(QWidget* p = target; p != nullptr; p = p->parentWidget())
+                {
+                    if(p->objectName() == "FloatingHomeButton" || p->property("isFloatingHome").toBool())
+                    {
+                        isFloatingHome = true;
+                        break;
+                    }
+                }
+                if(isFloatingHome)
+                {
+                    return QObject::eventFilter(obj, event);
+                }
+
+                QTouchEvent* te = static_cast<QTouchEvent*>(event);
+                if(!te->points().isEmpty())
+                {
+                    QPoint localPt = activeArea->mapFromGlobal(te->points().first().globalPosition().toPoint());
+                    if(activeArea->rect().contains(localPt))
+                    {
+                        touchActive_ = (event->type() == QEvent::TouchBegin || event->type() == QEvent::TouchUpdate);
+                        return this->handleQTouchEvent(te);
+                    }
+                }
+            }
+        }
+        else if(event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease ||
+                event->type() == QEvent::MouseMove)
+        {
+            QWidget* activeArea = qobject_cast<QWidget*>(&parent_);
+            if(activeArea != nullptr && activeArea->isVisible())
+            {
+                QMouseEvent* me = static_cast<QMouseEvent*>(event);
+                if(me->source() == Qt::MouseEventSynthesizedByQt && touchActive_)
+                {
+                    if(event->type() == QEvent::MouseButtonRelease)
+                    {
+                        touchActive_ = false;
+                    }
+                    return true;
+                }
+
+                QWidget* target = qobject_cast<QWidget*>(obj);
+                bool isFloatingHome = false;
+                for(QWidget* p = target; p != nullptr; p = p->parentWidget())
+                {
+                    if(p->objectName() == "FloatingHomeButton" || p->property("isFloatingHome").toBool())
+                    {
+                        isFloatingHome = true;
+                        break;
+                    }
+                }
+                if(isFloatingHome)
+                {
+                    return QObject::eventFilter(obj, event);
+                }
+
+                QPoint localPt = activeArea->mapFromGlobal(me->globalPosition().toPoint());
+                if(activeArea->rect().contains(localPt))
+                {
+                    return this->handleMouseEvent(me);
+                }
+            }
         }
     }
 
@@ -176,7 +256,50 @@ bool InputDevice::handleKeyEvent(QEvent* event, QKeyEvent* key)
     return true;
 }
 
-bool InputDevice::handleTouchEvent(QEvent* event)
+bool InputDevice::handleQTouchEvent(QTouchEvent* event)
+{
+    if(!configuration_->getTouchscreenEnabled() || event->points().isEmpty())
+    {
+        return true;
+    }
+
+    aasdk::proto::enums::TouchAction::Enum type;
+    switch(event->type())
+    {
+    case QEvent::TouchBegin:
+        type = aasdk::proto::enums::TouchAction::PRESS;
+        break;
+    case QEvent::TouchUpdate:
+        type = aasdk::proto::enums::TouchAction::DRAG;
+        break;
+    case QEvent::TouchEnd:
+    case QEvent::TouchCancel:
+        type = aasdk::proto::enums::TouchAction::RELEASE;
+        break;
+    default:
+        return true;
+    }
+
+    QWidget* activeArea = qobject_cast<QWidget*>(&parent_);
+    const auto& pt = event->points().first();
+    QPointF localPos = activeArea ? activeArea->mapFromGlobal(pt.globalPosition()) : pt.position();
+
+    float w = activeArea ? activeArea->width() : touchscreenGeometry_.width();
+    float h = activeArea ? activeArea->height() : touchscreenGeometry_.height();
+    if(w <= 0.0f) w = 1.0f;
+    if(h <= 0.0f) h = 1.0f;
+
+    float lx = std::clamp(static_cast<float>(localPos.x()), 0.0f, w);
+    float ly = std::clamp(static_cast<float>(localPos.y()), 0.0f, h);
+
+    const uint32_t x = std::clamp(static_cast<uint32_t>((lx / w) * displayGeometry_.width()), 0u, static_cast<uint32_t>(displayGeometry_.width() - 1));
+    const uint32_t y = std::clamp(static_cast<uint32_t>((ly / h) * displayGeometry_.height()), 0u, static_cast<uint32_t>(displayGeometry_.height() - 1));
+
+    eventHandler_->onTouchEvent({type, x, y, 0});
+    return true;
+}
+
+bool InputDevice::handleMouseEvent(QMouseEvent* mouse)
 {
     if(!configuration_->getTouchscreenEnabled())
     {
@@ -184,8 +307,7 @@ bool InputDevice::handleTouchEvent(QEvent* event)
     }
 
     aasdk::proto::enums::TouchAction::Enum type;
-
-    switch(event->type())
+    switch(mouse->type())
     {
     case QEvent::MouseButtonPress:
         type = aasdk::proto::enums::TouchAction::PRESS;
@@ -198,16 +320,42 @@ bool InputDevice::handleTouchEvent(QEvent* event)
         break;
     default:
         return true;
-    };
+    }
 
-    QMouseEvent* mouse = static_cast<QMouseEvent*>(event);
-    if(event->type() == QEvent::MouseButtonRelease || mouse->buttons().testFlag(Qt::LeftButton))
+    if(mouse->type() == QEvent::MouseButtonRelease || mouse->buttons().testFlag(Qt::LeftButton))
     {
-        const uint32_t x = (static_cast<float>(mouse->pos().x()) / touchscreenGeometry_.width()) * displayGeometry_.width();
-        const uint32_t y = (static_cast<float>(mouse->pos().y()) / touchscreenGeometry_.height()) * displayGeometry_.height();
+        QWidget* activeArea = qobject_cast<QWidget*>(&parent_);
+        QPointF localPos = activeArea ? activeArea->mapFromGlobal(mouse->globalPosition()) : mouse->position();
+
+        float w = activeArea ? activeArea->width() : touchscreenGeometry_.width();
+        float h = activeArea ? activeArea->height() : touchscreenGeometry_.height();
+        if(w <= 0.0f) w = 1.0f;
+        if(h <= 0.0f) h = 1.0f;
+
+        float lx = std::clamp(static_cast<float>(localPos.x()), 0.0f, w);
+        float ly = std::clamp(static_cast<float>(localPos.y()), 0.0f, h);
+
+        const uint32_t x = std::clamp(static_cast<uint32_t>((lx / w) * displayGeometry_.width()), 0u, static_cast<uint32_t>(displayGeometry_.width() - 1));
+        const uint32_t y = std::clamp(static_cast<uint32_t>((ly / h) * displayGeometry_.height()), 0u, static_cast<uint32_t>(displayGeometry_.height() - 1));
+
         eventHandler_->onTouchEvent({type, x, y, 0});
     }
 
+    return true;
+}
+
+bool InputDevice::handleTouchEvent(QEvent* event)
+{
+    if(event->type() == QEvent::TouchBegin || event->type() == QEvent::TouchUpdate ||
+       event->type() == QEvent::TouchEnd || event->type() == QEvent::TouchCancel)
+    {
+        return this->handleQTouchEvent(static_cast<QTouchEvent*>(event));
+    }
+    else if(event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease ||
+            event->type() == QEvent::MouseMove)
+    {
+        return this->handleMouseEvent(static_cast<QMouseEvent*>(event));
+    }
     return true;
 }
 

@@ -47,6 +47,20 @@ GSTVideoOutput::GSTVideoOutput(
 
   videoWidget_->setSource(QUrl("qrc:/aa_video.qml"));
   videoWidget_->setResizeMode(QQuickWidget::SizeRootObjectToView);
+  videoWidget_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+  videoWidget_->setAttribute(Qt::WA_AcceptTouchEvents, true);
+
+  if (videoContainer_ != nullptr) {
+    videoContainer_->setAttribute(Qt::WA_AcceptTouchEvents, true);
+    if (videoContainer_->layout() == nullptr) {
+      auto l = new QVBoxLayout(videoContainer_);
+      l->setContentsMargins(0, 0, 0, 0);
+      l->setSpacing(0);
+      l->addWidget(videoWidget_);
+    } else {
+      videoContainer_->layout()->addWidget(videoWidget_);
+    }
+  }
 
   if (QQuickWindow *qw = videoWidget_->quickWindow()) {
     connect(qw, &QQuickWindow::sceneGraphInitialized, this,
@@ -266,18 +280,12 @@ void GSTVideoOutput::onStartPlayback() {
     activeCallback_(true);
   }
 
-  if (videoContainer_ == nullptr) {
-    OPENAUTO_LOG(info)
-        << "[GSTVideoOutput] No video container, setting projection fullscreen";
-    videoWidget_->setFocus();
-    videoWidget_->setWindowFlags(Qt::WindowStaysOnTopHint |
-                                 Qt::FramelessWindowHint);
-    videoWidget_->showFullScreen();
-  } else {
+  if (videoContainer_ != nullptr) {
     OPENAUTO_LOG(info) << "[GSTVideoOutput] Resizing to video container";
     this->resize();
   }
   videoWidget_->show();
+  videoWidget_->setFocus();
   QCoreApplication::processEvents();
   this->tryStartPipeline();
 }
