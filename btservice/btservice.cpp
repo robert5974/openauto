@@ -33,50 +33,50 @@ btservice::btservice(openauto::configuration::IConfiguration::Pointer config)
     OPENAUTO_LOG(info) << "[btservice] Service registered, port: "
                        << assignedPort;
   }
-  if (config->getAutoconnectBluetooth())
+  if (config->getAutoconnectBluetooth() &&
+      !config->getLastBluetoothPair().empty()) {
     connectToBluetooth(QBluetoothAddress(QString::fromStdString(
                            config->getLastBluetoothPair())),
                        address);
+  }
+}
+
+btservice::~btservice() {
+  if (androidBluetoothService_) {
+    androidBluetoothService_->unregisterService();
+  }
+  if (btConnectProcess) {
+    if (btConnectProcess->state() != QProcess::NotRunning) {
+      btConnectProcess->kill();
+      btConnectProcess->waitForFinished(500);
+    }
+    delete btConnectProcess;
+    btConnectProcess = nullptr;
+  }
 }
 
 void btservice::connectToBluetooth(QBluetoothAddress addr,
                                    QBluetoothAddress controller) {
-  // The raspberry pi has a really tough time using bluetoothctl (or really
-  // anything) to connect to an Android phone even though phone connecting to
-  // the pi is fine. I found a workaround where you can make the pi attempt an
-  // rfcomm connection to the phone, and it connects immediately This might
-  // require setting u+s on rfcomm though Other computers with more sane
-  // bluetooth shouldn't have an issue using bluetoothctl
+  if (addr.isNull()) {
+    return;
+  }
 
-#ifdef RPI
-  // tries to open an rfcomm serial on channel 2
-  // channel doesn't really matter here, 2 is just "somewhat standard"
-  QString program = "sudo";
-  QStringList args;
-  args << "stdbuf" << "-oL" << "rfcomm" << "connect" << "hci0"
-       << addr.toString() << "2";
-  btConnectProcess = new QProcess();
-  OPENAUTO_LOG(info)
-      << "[btservice] Attempting to connect to last bluetooth device, "
-      << addr.toString().toStdString() << " with `" << program.toStdString()
-      << " " << args.join(" ").toStdString() << "`";
-  btConnectProcess->start(program, args,
-                          QProcess::Unbuffered | QProcess::ReadWrite);
-#else
+  // Non-blocking Bluetooth auto-connect to last paired Android phone
   btConnectProcess = new QProcess();
   btConnectProcess->setProcessChannelMode(QProcess::SeparateChannels);
   OPENAUTO_LOG(info)
-      << "[btservice] Attempting to connect to last bluetooth device, "
-      << addr.toString().toStdString() << " with bluetoothctl";
-  btConnectProcess->start("bluetoothctl");
-  btConnectProcess->waitForStarted();
-  btConnectProcess->write(
-      QString("select %1\n").arg(controller.toString()).toUtf8());
-  btConnectProcess->write(
-      QString("connect %1\n").arg(addr.toString()).toUtf8());
-  btConnectProcess->closeWriteChannel();
-  btConnectProcess->waitForFinished();
-#endif
+      << "[btservice] Attempting to connect to last bluetooth device: "
+      << addr.toString().toStdString();
+
+  QString targetAddr = addr.toString();
+  QString ctrlCmd = controller.isNull()
+                        ? QString()
+                        : QString("select %1\n").arg(controller.toString());
+  QString cmd = QString("printf '%1connect %2\\nquit\\n' | bluetoothctl "
+                        ">/dev/null 2>&1 || sudo -n rfcomm connect hci0 %2 2 "
+                        ">/dev/null 2>&1 || true")
+                    .arg(ctrlCmd, targetAddr);
+  btConnectProcess->start("/bin/sh", {"-c", cmd});
 }
 
 } // namespace btservice

@@ -63,7 +63,13 @@ AndroidBluetoothService::AndroidBluetoothService(uint16_t portNumber) {
 
 bool AndroidBluetoothService::registerService(
     const QBluetoothAddress &bluetoothAddress) {
-  return serviceInfo_.registerService(bluetoothAddress);
+  if (serviceInfo_.registerService(bluetoothAddress)) {
+    return true;
+  }
+  if (!bluetoothAddress.isNull()) {
+    return serviceInfo_.registerService(QBluetoothAddress());
+  }
+  return false;
 }
 
 bool AndroidBluetoothService::unregisterService() {

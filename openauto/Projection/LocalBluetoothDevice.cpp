@@ -39,6 +39,8 @@ void LocalBluetoothDevice::createBluetoothLocalDevice() {
 
   localDevice_ = std::make_unique<QBluetoothLocalDevice>(QBluetoothAddress());
 
+  connect(localDevice_.get(), &QBluetoothLocalDevice::pairingFinished, this,
+          &LocalBluetoothDevice::onPairingFinished);
   connect(localDevice_.get(), &QBluetoothLocalDevice::errorOccurred, this,
           &LocalBluetoothDevice::onError);
   connect(localDevice_.get(), &QBluetoothLocalDevice::hostModeStateChanged,
@@ -59,7 +61,12 @@ void LocalBluetoothDevice::stop() {
 bool LocalBluetoothDevice::isPaired(const std::string &address) const {
   std::lock_guard<decltype(mutex_)> lock(mutex_);
 
-  return false;
+  if (!localDevice_ || !localDevice_->isValid())
+    return false;
+
+  return localDevice_->pairingStatus(
+             QBluetoothAddress(QString::fromStdString(address))) !=
+         QBluetoothLocalDevice::Unpaired;
 }
 
 void LocalBluetoothDevice::pair(const std::string &address,
@@ -86,7 +93,38 @@ void LocalBluetoothDevice::onStartPairing(const QString &address,
 
   std::lock_guard<decltype(mutex_)> lock(mutex_);
 
-  promise->reject();
+  if (!localDevice_ || !localDevice_->isValid()) {
+    promise->reject();
+  } else {
+    if (pairingPromise_ != nullptr) {
+      pairingPromise_->reject();
+    }
+
+    pairingAddress_ = QBluetoothAddress(address);
+    pairingPromise_ = std::move(promise);
+    localDevice_->requestPairing(pairingAddress_,
+                                 QBluetoothLocalDevice::AuthorizedPaired);
+  }
+}
+
+void LocalBluetoothDevice::onPairingFinished(
+    const QBluetoothAddress &address, QBluetoothLocalDevice::Pairing pairing) {
+  OPENAUTO_LOG(debug) << "[LocalBluetoothDevice] onPairingFinished, address: "
+                      << address.toString().toStdString()
+                      << ", pairing: " << pairing;
+
+  std::lock_guard<decltype(mutex_)> lock(mutex_);
+
+  if (address == pairingAddress_ && pairingPromise_ != nullptr) {
+    if (pairing != QBluetoothLocalDevice::Unpaired) {
+      pairingPromise_->resolve();
+    } else {
+      pairingPromise_->reject();
+    }
+
+    pairingPromise_.reset();
+    pairingAddress_ = QBluetoothAddress();
+  }
 }
 
 void LocalBluetoothDevice::onError(QBluetoothLocalDevice::Error error) {

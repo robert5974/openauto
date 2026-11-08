@@ -69,16 +69,49 @@ bool AndroidBluetoothServer::writeProtoMessage(
   return true;
 }
 
+static QString resolveWirelessHeadUnitIPv4() {
+  // Prefer the wlan0 Wi-Fi hotspot interface IPv4 address (e.g., 10.42.0.1)
+  QNetworkInterface wlan0 = QNetworkInterface::interfaceFromName("wlan0");
+  if (wlan0.isValid()) {
+    for (const QNetworkAddressEntry &entry : wlan0.addressEntries()) {
+      QHostAddress addr = entry.ip();
+      if (!addr.isLoopback() &&
+          addr.protocol() == QAbstractSocket::IPv4Protocol) {
+        return addr.toString();
+      }
+    }
+  }
+
+  // Fallback: check any wireless/AP interface (wlan*, uap*, ap*)
+  for (const QNetworkInterface &iface : QNetworkInterface::allInterfaces()) {
+    QString name = iface.name().toLower();
+    if (name.startsWith("wlan") || name.startsWith("uap") ||
+        name.startsWith("ap")) {
+      for (const QNetworkAddressEntry &entry : iface.addressEntries()) {
+        QHostAddress addr = entry.ip();
+        if (!addr.isLoopback() &&
+            addr.protocol() == QAbstractSocket::IPv4Protocol) {
+          return addr.toString();
+        }
+      }
+    }
+  }
+
+  // Fallback: any non-loopback IPv4 address
+  for (const QHostAddress &addr : QNetworkInterface::allAddresses()) {
+    if (!addr.isLoopback() &&
+        addr.protocol() == QAbstractSocket::IPv4Protocol) {
+      return addr.toString();
+    }
+  }
+
+  return QStringLiteral("10.42.0.1");
+}
+
 void AndroidBluetoothServer::writeSocketInfoRequest() {
   OPENAUTO_LOG(info) << "[AndroidBluetoothServer] Sending SocketInfoRequest.";
 
-  QString ipAddr;
-  foreach (QHostAddress addr, QNetworkInterface::allAddresses()) {
-    if (!addr.isLoopback() &&
-        (addr.protocol() == QAbstractSocket::IPv4Protocol)) {
-      ipAddr = addr.toString();
-    }
-  }
+  QString ipAddr = resolveWirelessHeadUnitIPv4();
 
   btservice::proto::SocketInfoRequest socketInfoRequest;
   socketInfoRequest.set_ip_address(ipAddr.toStdString());
@@ -97,13 +130,7 @@ void AndroidBluetoothServer::writeSocketInfoRequest() {
 }
 void AndroidBluetoothServer::writeSocketInfoResponse() {
   OPENAUTO_LOG(info) << "[AndroidBluetoothServer] Sending SocketInfoResponse.";
-  QString ipAddr;
-  foreach (QHostAddress addr, QNetworkInterface::allAddresses()) {
-    if (!addr.isLoopback() &&
-        (addr.protocol() == QAbstractSocket::IPv4Protocol)) {
-      ipAddr = addr.toString();
-    }
-  }
+  QString ipAddr = resolveWirelessHeadUnitIPv4();
 
   btservice::proto::SocketInfoResponse socketInfoResponse;
   socketInfoResponse.set_ip_address(ipAddr.toStdString());
@@ -151,14 +178,23 @@ void AndroidBluetoothServer::handleSocketInfoRequest(QByteArray data) {
 void AndroidBluetoothServer::writeNetworkInfoMessage() {
   OPENAUTO_LOG(info) << "[AndroidBluetoothServer] Sending NetworkInfoMessage.";
 
-  btservice::proto::NetworkInfo networkMessage;
-  networkMessage.set_ssid(config_->getWifiSSID());
-  OPENAUTO_LOG(info) << "[AndroidBluetoothServer] SSID: "
-                     << config_->getWifiSSID();
+  std::string ssid = config_->getWifiSSID();
+  if (ssid.empty()) {
+    ssid = "OpenDash2";
+    config_->setWifiSSID(ssid);
+  }
+  std::string psk = config_->getWifiPassword();
+  if (psk.size() < 8) {
+    psk = "opendash2";
+    config_->setWifiPassword(psk);
+  }
 
-  networkMessage.set_psk(config_->getWifiPassword());
-  OPENAUTO_LOG(info) << "[AndroidBluetoothServer] PSKEY: "
-                     << config_->getWifiPassword();
+  btservice::proto::NetworkInfo networkMessage;
+  networkMessage.set_ssid(ssid);
+  OPENAUTO_LOG(info) << "[AndroidBluetoothServer] SSID: " << ssid;
+
+  networkMessage.set_psk(psk);
+  OPENAUTO_LOG(info) << "[AndroidBluetoothServer] PSKEY: " << psk;
 
   if (config_->getWifiMAC().empty()) {
     networkMessage.set_mac_addr(QNetworkInterface::interfaceFromName("wlan0")
@@ -210,22 +246,37 @@ void AndroidBluetoothServer::readSocket() {
     return;
   }
 
-  uint16_t messageType = (data[2] << 8) | data[3];
-  switch (messageType) {
-  case 1:
-    handleSocketInfoRequest(data);
-    break;
-  case 2:
-    writeNetworkInfoMessage();
-    break;
-  case 7:
-    data.remove(0, 4);
-    handleSocketInfoRequestResponse(data);
-    break;
-  default:
-    data.remove(0, 4);
-    handleUnknownMessage(messageType, data);
-    break;
+  while (data.length() >= 4) {
+    uint16_t payloadLen = (static_cast<uint8_t>(data[0]) << 8) |
+                          static_cast<uint8_t>(data[1]);
+    uint16_t messageType = (static_cast<uint8_t>(data[2]) << 8) |
+                           static_cast<uint8_t>(data[3]);
+    int packetSize = 4 + static_cast<int>(payloadLen);
+    QByteArray packet = (data.length() >= packetSize)
+                            ? data.left(packetSize)
+                            : data;
+    QByteArray payload = packet.mid(4);
+
+    switch (messageType) {
+    case 1:
+      handleSocketInfoRequest(packet);
+      break;
+    case 2:
+      writeNetworkInfoMessage();
+      break;
+    case 7:
+      handleSocketInfoRequestResponse(payload);
+      break;
+    default:
+      handleUnknownMessage(messageType, payload);
+      break;
+    }
+
+    if (data.length() >= packetSize && packetSize > 0) {
+      data.remove(0, packetSize);
+    } else {
+      break;
+    }
   }
 }
 

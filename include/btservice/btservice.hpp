@@ -16,12 +16,13 @@ class btservice
 {
 public:
     btservice(openauto::configuration::IConfiguration::Pointer config);
+    ~btservice();
 
 private:
     void connectToBluetooth(QBluetoothAddress addr, QBluetoothAddress controller);
     std::unique_ptr<openauto::btservice::AndroidBluetoothService> androidBluetoothService_;
     openauto::btservice::AndroidBluetoothServer androidBluetoothServer_;
-    QProcess *btConnectProcess;
+    QProcess *btConnectProcess = nullptr;
 };
 
 }

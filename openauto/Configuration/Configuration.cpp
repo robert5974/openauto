@@ -98,7 +98,7 @@ void Configuration::load()
         this->readButtonCodes(iniConfig);
 
         bluetoothAdapterType_ = static_cast<BluetoothAdapterType>(iniConfig.get<uint32_t>(cBluetoothAdapterTypeKey,
-                                                                                          static_cast<uint32_t>(BluetoothAdapterType::NONE)));
+                                                                                          static_cast<uint32_t>(BluetoothAdapterType::LOCAL)));
 
         bluetoothRemoteAdapterAddress_ = iniConfig.get<std::string>(cBluetoothRemoteAdapterAddressKey, "");
 
@@ -106,10 +106,14 @@ void Configuration::load()
         speechAudiochannelEnabled_ = iniConfig.get<bool>(cAudioSpeechAudioChannelEnabled, true);
         audioOutputBackendType_ = static_cast<AudioOutputBackendType>(iniConfig.get<uint32_t>(cAudioOutputBackendType, static_cast<uint32_t>(AudioOutputBackendType::QT)));
 
-        wifiSSID_ = iniConfig.get<std::string>(cWifiSSID, "");
-        wifiPassword_ = iniConfig.get<std::string>(cWifiPskey, "");
+        wifiSSID_ = iniConfig.get<std::string>(cWifiSSID, "OpenDash2");
+        if (wifiSSID_.empty())
+            wifiSSID_ = "OpenDash2";
+        wifiPassword_ = iniConfig.get<std::string>(cWifiPskey, "opendash2");
+        if (wifiPassword_.size() < 8)
+            wifiPassword_ = "opendash2";
         wifiMAC_ = iniConfig.get<std::string>(cWifiMAC, "");
-        autoconnectBluetooth_ = iniConfig.get<bool>(cAutoconnectBluetooth, false);
+        autoconnectBluetooth_ = iniConfig.get<bool>(cAutoconnectBluetooth, true);
         lastBluetoothPair_ = iniConfig.get<std::string>(cLastBluetoothPair, "");
     }
     catch(const boost::property_tree::ini_parser_error& e)
@@ -132,11 +136,16 @@ void Configuration::reset()
     videoMargins_ = QRect(0, 0, 0, 0);
     enableTouchscreen_ = true;
     buttonCodes_.clear();
-    bluetoothAdapterType_ = BluetoothAdapterType::NONE;
+    bluetoothAdapterType_ = BluetoothAdapterType::LOCAL;
     bluetoothRemoteAdapterAddress_ = "";
     musicAudioChannelEnabled_ = true;
     speechAudiochannelEnabled_ = true;
     audioOutputBackendType_ = AudioOutputBackendType::QT;
+    wifiSSID_ = "OpenDash2";
+    wifiPassword_ = "opendash2";
+    wifiMAC_ = "";
+    autoconnectBluetooth_ = true;
+    lastBluetoothPair_ = "";
 }
 
 void Configuration::save()
