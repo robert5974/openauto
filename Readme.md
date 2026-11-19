@@ -14,7 +14,7 @@ OpenAuto is an AndroidAuto(tm) headunit emulator based on aasdk library and Qt l
 3. OpenAuto
 4. Dash
 
-Having <a href="https://github.com/openDsh/aasdk">aasdk</a> built and installed first, is a prequisite for this task. Please complete the necessary aasdk steps before proceeding here.
+Having <a href="https://github.com/robert5974/aasdk">aasdk</a> built and installed first, is a prequisite for this task. Please complete the necessary aasdk steps before proceeding here.
 
 Before building OpenAuto, build **Qt-GStreamer** with the following instructions:
 
@@ -24,7 +24,7 @@ sudo apt install qt5-default qml-module-qtquick2 qtdeclarative5-dev qtmultimedia
 ```
 **2. Clone the qt-gstreamer repo:**
 ```
-git clone git://anongit.freedesktop.org/gstreamer/qt-gstreamer
+git clone https://github.com/robert5974/qt-gstreamer
 ```
 **3. Change to the cloned directory:**
 ```
@@ -61,7 +61,7 @@ sudo apt-get install libboost-all-dev libusb-1.0.0-dev libssl-dev cmake libproto
 ```
 **2. Clone the OpenAuto repo:**
 ```
-git clone https://github.com/OpenDsh/openauto
+git clone https://github.com/robert5974/openauto
 ```
 **3. Change to the cloned directory:**
 ```
@@ -108,7 +108,7 @@ Copyrights (c) 2018 f1x.studio (Michal Szwaj)
 *AndroidAuto is registered trademark of Google Inc.*
 
 ### Used software
- - [aasdk](https://github.com/f1xpl/aasdk)
+ - [aasdk](https://github.com/robert5974/aasdk)
  - [Boost libraries](http://www.boost.org/)
  - [Qt libraries](https://www.qt.io/)
  - [CMake](https://cmake.org/)
