@@ -3,6 +3,7 @@
 
 lib/
 bin/
+build/
 .idea/
 
 CMakeLists.txt.user
