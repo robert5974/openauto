@@ -23,6 +23,7 @@
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QTimer>
+#include <QVBoxLayout>
 
 
 namespace openauto {
